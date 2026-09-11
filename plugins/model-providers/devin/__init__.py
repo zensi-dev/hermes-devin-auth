@@ -34,10 +34,11 @@ class DevinProviderProfile(ProviderProfile):
     """Devin Cascade — Connect/protobuf wire, OAuth session-token auth."""
 
     def create_client(self, **client_kwargs: Any):
-        # Retry the aux-route patch here too: at plugin-import time
-        # ``agent.auxiliary_client`` can be mid-import (cycle) and the first
-        # install attempt no-ops. create_client runs before any aux call can
-        # succeed, so this is the last safe install point.
+        # Deferred aux-route install: importing ``agent.auxiliary_client`` at
+        # plugin-import time triggers ``hermes_cli.auth`` mid-discovery, which
+        # snapshots PROVIDER_REGISTRY before register_provider() runs — the
+        # provider then KeyErrors in the model picker. create_client runs only
+        # after registration, so it is the first safe install point.
         _install_auxiliary_route()
         api_key = (client_kwargs.get("api_key") or "").strip()
         if not api_key:
@@ -52,6 +53,8 @@ class DevinProviderProfile(ProviderProfile):
 
     def fetch_models(self, *, api_key: Optional[str] = None,
                      base_url: Optional[str] = None, timeout: float = 8.0):
+        # Same deferred install as create_client — safe post-registration.
+        _install_auxiliary_route()
         if not api_key:
             return None
         try:
@@ -145,10 +148,6 @@ def _install_auxiliary_route() -> None:
     aux._resolve_api_key_branch = _resolve
 
 
-try:
-    _install_auxiliary_route()
-except Exception:  # never let routing setup break provider registration
-    logger.debug("devin: auxiliary route patch skipped", exc_info=True)
 
 
 register_provider(DevinProviderProfile(
