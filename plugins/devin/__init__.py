@@ -106,9 +106,11 @@ def _cmd_login(args) -> int:
         print("devin: provider package not found — install plugins/model-providers/devin")
         return 1
     print("Opening Devin sign-in in your browser…")
-    print("(If it doesn't open, copy the URL below.)")
+    print("If it doesn't open (or Hermes runs on another machine), copy the URL below,")
+    print("sign in, then paste the callback URL you're redirected to here.")
     try:
-        token = oauth.run_login_flow(on_url=lambda u: print(f"\n{u}\n"))
+        token = oauth.run_login_flow(
+            on_url=lambda u: print(f"\n{u}\n\nPaste callback URL (or press Enter to keep waiting): ", end="", flush=True))
     except oauth.DevinLoginError as exc:
         print(f"devin: login failed — {exc}")
         return 1

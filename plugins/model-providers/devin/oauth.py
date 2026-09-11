@@ -19,7 +19,9 @@ from __future__ import annotations
 import base64
 import hashlib
 import json
+import queue
 import secrets
+import sys
 import threading
 import time
 import urllib.parse
@@ -140,9 +142,53 @@ class _CallbackHandler(BaseHTTPRequestHandler):
         pass
 
 
+def _parse_callback_input(text: str) -> Optional[dict]:
+    """Extract code/state/error from a pasted callback URL or a bare code.
+
+    Returns ``None`` for empty input. A bare code (no ``state``) is accepted —
+    the state check is a CSRF guard for the HTTP redirect, not for a value the
+    user pasted by hand.
+    """
+    text = (text or "").strip()
+    if not text:
+        return None
+    if "code=" in text or text.startswith(("http://", "https://")):
+        params = urllib.parse.parse_qs(urllib.parse.urlparse(text).query)
+        return {
+            "code": (params.get("code") or [""])[0],
+            "state": (params.get("state") or [""])[0],
+            "error": (params.get("error") or [""])[0],
+        }
+    return {"code": text, "state": "", "error": ""}
+
+
+def _stdin_callback(result_queue) -> None:
+    """Daemon thread: read stdin lines → first parsed callback into the queue.
+
+    Loops past blank/unparseable lines (a stray Enter shouldn't kill the paste
+    path); exits quietly on EOF (piped stdin / no TTY) so the server path
+    still works.
+    """
+    while True:
+        try:
+            line = sys.stdin.readline()
+        except Exception:
+            return
+        if not line:
+            return  # EOF
+        parsed = _parse_callback_input(line)
+        if parsed is not None:
+            result_queue.put(parsed)
+            return
+
+
 def run_login_flow(*, open_browser: bool = True, timeout: float = LOGIN_TIMEOUT_S,
                    on_url=None) -> str:
     """Run the full browser OAuth flow; returns the raw session token.
+
+    Waits on BOTH the local callback server AND a pasted callback URL/code on
+    stdin — first valid result wins. The stdin path covers headless/SSH setups
+    where the browser runs on a different machine than Hermes.
 
     ``on_url`` (optional) is called with the authorization URL once known so
     callers can display it for manual copy/paste.
@@ -159,7 +205,6 @@ def run_login_flow(*, open_browser: bool = True, timeout: float = LOGIN_TIMEOUT_
         server = HTTPServer(("127.0.0.1", 0), _CallbackHandler)
         port = server.server_address[1]
     server.callback_result = None  # type: ignore[attr-defined]
-    server.timeout = 0.5
 
     redirect_uri = f"http://127.0.0.1:{port}{CALLBACK_PATH}"
     params = urllib.parse.urlencode({
@@ -179,21 +224,32 @@ def run_login_flow(*, open_browser: bool = True, timeout: float = LOGIN_TIMEOUT_
         except Exception:
             pass
 
+    results: "queue.Queue" = queue.Queue()
+    server_thread = threading.Thread(target=server.serve_forever,
+                                     kwargs={"poll_interval": 0.2}, daemon=True)
+    server_thread.start()
+    threading.Thread(target=_stdin_callback, args=(results,), daemon=True).start()
+
     deadline = time.monotonic() + timeout
     try:
         while time.monotonic() < deadline:
-            server.handle_request()
+            # HTTP callback arrives via the handler → server.callback_result.
             result = server.callback_result  # type: ignore[attr-defined]
-            if result is not None:
-                if result["error"]:
-                    raise DevinLoginError(f"Devin sign-in failed: {result['error']}")
-                if result["state"] != state:
-                    raise DevinLoginError("Devin sign-in failed: state mismatch (CSRF check)")
-                if not result["code"]:
-                    raise DevinLoginError("Devin sign-in failed: no authorization code returned")
-                return exchange_code(result["code"], verifier)
+            if result is None:
+                try:
+                    result = results.get(timeout=0.25)
+                except queue.Empty:
+                    continue
+            if result["error"]:
+                raise DevinLoginError(f"Devin sign-in failed: {result['error']}")
+            if result["state"] and result["state"] != state:
+                raise DevinLoginError("Devin sign-in failed: state mismatch (CSRF check)")
+            if not result["code"]:
+                raise DevinLoginError("Devin sign-in failed: no authorization code returned")
+            return exchange_code(result["code"], verifier)
         raise DevinLoginError("Devin sign-in timed out waiting for the browser callback")
     finally:
+        server.shutdown()
         server.server_close()
 
 
