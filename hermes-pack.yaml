@@ -11,8 +11,8 @@ author: zensi-dev
 version: 1.0.0
 plugins:
   - repo: zensi-dev/hermes-devin-auth
-    ref: 4cfc6f381258b3b18d86a577ffd1c26334e8d69a
+    ref: a17b07e2a2ed40293ef121019f49a8b98a32d103
     subdir: plugins/model-providers/devin
   - repo: zensi-dev/hermes-devin-auth
-    ref: 4cfc6f381258b3b18d86a577ffd1c26334e8d69a
+    ref: a17b07e2a2ed40293ef121019f49a8b98a32d103
     subdir: plugins/devin
