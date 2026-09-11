@@ -248,8 +248,9 @@ def build_chat_request(*, api_key: str, user_jwt: str, model_uid: str,
             ]
             if not text and not thinking and not tool_calls:
                 continue
+            seed = f"{cascade_id}\x00{index}\x00assistant"
             prompts.append(_chat_message_prompt(
-                f"bot-{_deterministic_uuid(f'{cascade_id}\x00{index}\x00assistant')}",
+                f"bot-{_deterministic_uuid(seed)}",
                 SRC_SYSTEM, text, tool_calls=tool_calls, thinking=thinking))
         elif role == "tool":
             text, images = _content_text_and_images(msg.get("content"))
