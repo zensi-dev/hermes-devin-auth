@@ -1,0 +1,6 @@
+name: devin
+version: 1.0.0
+description: "Devin sign-in for Hermes — `hermes devin login` + `/devin` (OAuth PKCE, no Devin CLI)"
+author: zensi-dev
+homepage: https://github.com/zensi-dev/hermes-devin-auth
+tags: [devin, oauth, auth]

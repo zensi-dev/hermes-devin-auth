@@ -1,0 +1,18 @@
+# Devin pack — installs BOTH halves of this repo in one command:
+#   hermes plugins pack install https://raw.githubusercontent.com/zensi-dev/hermes-devin-auth/<ref>/hermes-pack.yaml
+#
+# Pack entries require exact 40-char commit SHAs (tags/branches rejected).
+# `ref:` always points at the previous release commit — the pack can't
+# reference the commit that contains it. Bump both refs after each release
+# (`git rev-parse HEAD`), or regenerate with `hermes plugins pack export`.
+name: devin-pack
+description: Devin provider + sign-in for Hermes (Cascade API, OAuth PKCE)
+author: zensi-dev
+version: 1.0.0
+plugins:
+  - repo: zensi-dev/hermes-devin-auth
+    ref: <40-char-commit-sha>
+    subdir: plugins/model-providers/devin
+  - repo: zensi-dev/hermes-devin-auth
+    ref: <40-char-commit-sha>
+    subdir: plugins/devin

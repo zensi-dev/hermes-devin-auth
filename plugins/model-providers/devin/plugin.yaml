@@ -1,0 +1,10 @@
+name: devin-provider
+version: 1.0.0
+kind: model-provider
+description: "Devin (SWE models) via the Cascade API — Connect/protobuf integration"
+author: zensi-dev
+homepage: https://github.com/zensi-dev/hermes-devin-auth
+tags: [provider, devin, oauth]
+python_dependencies:
+  - "httpx>=0.24,<1"
+
