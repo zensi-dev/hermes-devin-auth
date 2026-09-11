@@ -536,7 +536,10 @@ class DevinClient:
                 tool_calls.append({
                     "id": pw.get_str(tc, 1),
                     "name": pw.get_str(tc, 2),
-                    "arguments_json": pw.get_str(tc, 3),
+                    # Field 4 (invalid_json_str) carries the raw payload when the
+                    # server couldn't parse it as JSON — better to surface the
+                    # malformed args than to silently dispatch with {}.
+                    "arguments_json": pw.get_str(tc, 3) or pw.get_str(tc, 4),
                 })
             usage = None
             usage_fields = pw.get_msg(fields, 7)
@@ -558,6 +561,7 @@ class DevinClient:
         """Translate normalized events into ChatCompletionChunk-shaped deltas."""
         tool_order: Dict[str, int] = {}
         partial_json: Dict[str, str] = {}
+        active_id: Optional[str] = None
         saw_tool_calls = False
         latest_stop = 0
         usage_ns = None
@@ -580,9 +584,12 @@ class DevinClient:
                                               role=None, tool_calls=None),
                              chunk_id=response_id)
             for tc in event["tool_calls"]:
-                tc_id = tc["id"]
+                # Argument continuations arrive in id-less frames that extend the
+                # active call (same convention as the reference client).
+                tc_id = tc["id"] or active_id
                 if not tc_id:
                     continue
+                active_id = tc_id
                 saw_tool_calls = True
                 if tc_id not in tool_order:
                     tool_order[tc_id] = len(tool_order)
@@ -617,6 +624,7 @@ class DevinClient:
         """Non-streaming: consume the stream, return a ChatCompletion-shaped object."""
         text_parts: List[str] = []
         thinking_parts: List[str] = []
+        active_id: Optional[str] = None
         tool_calls: Dict[str, Dict[str, str]] = {}
         latest_stop = 0
         usage_ns = None
@@ -635,9 +643,10 @@ class DevinClient:
             if event["text"]:
                 text_parts.append(event["text"])
             for tc in event["tool_calls"]:
-                tc_id = tc["id"]
+                tc_id = tc["id"] or active_id
                 if not tc_id:
                     continue
+                active_id = tc_id
                 entry = tool_calls.setdefault(tc_id, {"id": tc_id, "name": "", "args": ""})
                 if tc["name"]:
                     entry["name"] = tc["name"]
