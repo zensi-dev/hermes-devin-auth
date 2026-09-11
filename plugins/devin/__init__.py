@@ -119,8 +119,12 @@ def _cmd_login(args) -> int:
         return 130
     oauth.save_session_token(token)
     label = oauth.token_subject(token)
-    print(f"devin: signed in{f' as {label}' if label else ''}. "
-          "Use `--provider devin` or `/model devin` to chat.")
+    print(f"devin: signed in{f' as {label}' if label else ''}.\n")
+    # Chain straight into model selection when interactive — the whole point of
+    # signing in is picking a model.
+    if sys.stdin.isatty():
+        return _pick_and_save_model(token)
+    print("Run `hermes devin use` to pick a model.")
     return 0
 
 
@@ -166,6 +170,113 @@ def _cmd_status(args) -> int:
     return 0
 
 
+def _pick_model(models, current: str = ""):
+    """Arrow-key picker over the live model list; falls back to numbered input.
+
+    List-only by design — no free-text model entry. Returns the chosen model
+    id, or None on cancel.
+    """
+    ordered = list(dict.fromkeys(
+        ([current] if current and current in models else []) + list(models)))
+    try:
+        from hermes_cli.curses_ui import curses_radiolist
+        idx = curses_radiolist(
+            "Select default model:", ordered,
+            selected=0, cancel_returns=-1, searchable=True)
+        return ordered[idx] if 0 <= idx < len(ordered) else None
+    except Exception:
+        pass
+    for i, m in enumerate(ordered, 1):
+        marker = " (current)" if m == current else ""
+        print(f"  {i}. {m}{marker}")
+    try:
+        raw = input("Model number (Enter to cancel): ").strip()
+    except (EOFError, KeyboardInterrupt):
+        return None
+    if not raw:
+        return None
+    try:
+        n = int(raw)
+    except ValueError:
+        return None
+    return ordered[n - 1] if 1 <= n <= len(ordered) else None
+
+
+def _save_devin_model(selected: str) -> None:
+    """Persist model.default + model.provider=devin; the provider profile owns
+    the endpoint, so stale base_url/api_key/api_mode keys are dropped."""
+    from hermes_cli.config import load_config, save_config
+    cfg = load_config()
+    model = cfg.get("model")
+    if not isinstance(model, dict):
+        model = {"default": model} if model else {}
+        cfg["model"] = model
+    model["default"] = selected
+    model["provider"] = "devin"
+    for stale in ("base_url", "api_key", "api_mode"):
+        model.pop(stale, None)
+    save_config(cfg)
+    try:
+        from hermes_cli.auth import deactivate_provider
+        deactivate_provider()
+    except Exception:
+        pass
+
+
+def _pick_and_save_model(token: str) -> int:
+    """Fetch live models → picker → persist. Shared by `use` and post-login."""
+    client = _client_mod()
+    if client is None:
+        print("devin: provider package not found")
+        return 1
+    try:
+        models = client.list_models(token, timeout=10.0)
+    except Exception as exc:
+        print(f"devin: model list failed — {exc}")
+        return 1
+    if not models:
+        print("devin: no models returned")
+        return 1
+    try:
+        from hermes_cli.config import load_config
+        cfg = load_config()
+        model_cfg = cfg.get("model") if isinstance(cfg.get("model"), dict) else {}
+        current = model_cfg.get("default", "") if model_cfg.get("provider") == "devin" else ""
+    except Exception:
+        current = ""
+    selected = _pick_model(models, current)
+    if not selected:
+        print("No change.")
+        return 0
+    _save_devin_model(selected)
+    print(f"Default model set to: {selected} (via Devin)")
+    return 0
+
+
+def _cmd_use(args) -> int:
+    oauth = _oauth()
+    if oauth is None:
+        print("devin: provider package not found")
+        return 1
+    token = oauth.load_session_token()
+    if not token:
+        try:
+            answer = input("devin: not signed in. Run browser sign-in now? [Y/n] ").strip().lower()
+        except (EOFError, KeyboardInterrupt):
+            return 1
+        if answer in ("n", "no"):
+            return 1
+        try:
+            token = oauth.run_login_flow(
+                on_url=lambda u: print(f"\n{u}\n\nPaste callback URL (or press Enter to keep waiting): ", end="", flush=True))
+            oauth.save_session_token(token)
+            print("devin: signed in.\n")
+        except Exception as exc:
+            print(f"devin: login failed — {exc}")
+            return 1
+    return _pick_and_save_model(token)
+
+
 def _cmd_models(args) -> int:
     oauth = _oauth()
     client = _client_mod()
@@ -188,7 +299,6 @@ def _cmd_models(args) -> int:
         print(m)
     return 0
 
-
 def _cmd_help(args) -> int:
     print("devin — Devin provider auth\n"
           "\n"
@@ -196,6 +306,7 @@ def _cmd_help(args) -> int:
           "  hermes devin logout    Remove the OAuth credential\n"
           "  hermes devin status    Show sign-in state + API check\n"
           "  hermes devin models    List available models\n"
+          "  hermes devin use       Pick a model and set it as default\n"
           "\n"
           "Then use `--provider devin` or `/model devin` inside a session.")
     return 0
@@ -221,6 +332,9 @@ def _setup_devin(parser):
 
     p = sub.add_parser("models", help="List available Devin models")
     p.set_defaults(func=_cmd_models)
+
+    p = sub.add_parser("use", help="Pick a Devin model and set it as default")
+    p.set_defaults(func=_cmd_use)
 
     parser.set_defaults(func=_cmd_help)
 

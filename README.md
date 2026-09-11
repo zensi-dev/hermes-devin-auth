@@ -29,10 +29,14 @@ hermes plugins pack install https://raw.githubusercontent.com/zensi-dev/hermes-d
 Then sign in and use it:
 
 ```bash
-hermes devin login                              # browser OAuth
-hermes -z "fix the tests" --provider devin -m swe-1-6
+hermes devin login                              # browser OAuth → model picker
+hermes -z "fix the tests" -m swe-1-6
 # or inside a session: /model devin
 ```
+
+`hermes devin login` signs in and then offers the live model picker — the
+chosen model is saved as your default with `provider: devin`. To switch later:
+`hermes devin use`.
 
 ### Alternative: install each plugin separately
 
