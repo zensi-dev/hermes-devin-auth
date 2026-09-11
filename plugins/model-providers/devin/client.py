@@ -442,7 +442,7 @@ class DevinClient:
 
     # -- chat ---------------------------------------------------------------
 
-    def _create(self, *, model: str, messages: List[Dict[str, Any]], stream: bool,
+    def _create(self, *, model: str, messages: List[Dict[str, Any]], stream: bool = False,
                 tools=None, max_tokens=None, max_completion_tokens=None,
                 temperature=None, top_p=None, stop=None, extra_body=None,
                 timeout=None, **_ignored):
