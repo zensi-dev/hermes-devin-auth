@@ -1,9 +1,10 @@
-# hermes-devin-auth
+# Hermes Devin Auth — Devin SWE Models for Hermes Agent
 
-Use [Devin](https://app.devin.ai)'s SWE models in
-[Hermes Agent](https://github.com/NousResearch/hermes-agent) — browser sign-in
-plus a native model provider. No Devin CLI, no ACP subprocess, no `devin` tool
-calls.
+Use [Devin](https://app.devin.ai)'s SWE coding models directly in
+[Hermes Agent](https://github.com/NousResearch/hermes-agent). This Python plugin
+pack adds browser OAuth authentication and a native Devin model provider with
+streaming responses, tool calling, and live model discovery. Install both
+plugins with one command, sign in, and select a model.
 
 ## What you get
 

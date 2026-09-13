@@ -6,7 +6,7 @@
 # reference the commit that contains it. Bump both refs after each release
 # (`git rev-parse HEAD`), or regenerate with `hermes plugins pack export`.
 name: devin-pack
-description: Devin provider + sign-in for Hermes (Cascade API, OAuth PKCE)
+description: Devin SWE models for Hermes Agent with native model integration and browser OAuth login.
 author: zensi-dev
 version: 1.0.0
 plugins:
