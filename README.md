@@ -1,105 +1,185 @@
-# Hermes Devin Auth — Devin SWE Models for Hermes Agent
+# Hermes Devin Auth
 
-Use [Devin](https://app.devin.ai)'s SWE coding models directly in
-[Hermes Agent](https://github.com/NousResearch/hermes-agent). This Python plugin
-pack adds browser OAuth authentication and a native Devin model provider with
-streaming responses, tool calling, and live model discovery. Install both
-plugins with one command, sign in, and select a model.
+Use [Devin](https://app.devin.ai)'s SWE coding models in
+[Hermes Agent](https://github.com/NousResearch/hermes-agent). Sign in with your
+Devin account, choose a model, and start working in Hermes.
 
-## What you get
+You get browser sign-in, a picker for available models, streaming responses,
+and support for Hermes tool calling. You do not need to install the Devin CLI.
 
-- **`hermes devin login`** — browser OAuth (PKCE S256) against `app.devin.ai`,
-  local callback on `127.0.0.1:59653`, token exchange at
-  `api.devin.ai/auth/cli/token`. The session JWT is stored in Hermes'
-  credential pool (`auth.json`).
-- **`--provider devin`** — a `devin` model provider that talks directly to the
-  Devin Cascade API (`server.codeium.com`) over Connect-protocol protobuf:
-  `AuthService/GetUserJwt` → `ApiServerService/GetChatMessage` (gzip Connect
-  frames) → OpenAI-shaped streaming chunks.
-- **`hermes devin status` / `hermes devin models` / `/devin`** — sign-in state,
-  live model list via `GetCliModelConfigs`, in-session status.
+## Before you start
 
-## Install
+- Install Hermes Agent with support for `hermes plugins install` and
+  model-provider plugins.
+- Make sure Git is available in your terminal: `git --version`.
+- Have a Devin account and a browser available for sign-in.
 
-One command — installs and enables both plugins, pinned to an exact commit:
+## Get started
+
+### 1. Install both plugins
+
+Run both commands in your terminal, using the full paths shown:
+
+```bash
+hermes plugins install zensi-dev/hermes-devin-auth/plugins/model-providers/devin --enable
+hermes plugins install zensi-dev/hermes-devin-auth/plugins/devin --enable
+```
+
+Both are required: `devin-provider` connects Hermes to Devin's models, and
+`devin` adds the sign-in and model-selection commands. Accept any dependency
+prompts during installation.
+
+If you use multiple Hermes profiles, install and run the plugins in the same
+profile. Restart any existing Hermes sessions after installation.
+
+### 2. Sign in and choose a model
+
+```bash
+hermes devin login
+```
+
+Complete sign-in in your browser, then return to the terminal. In an
+interactive terminal, the model picker opens automatically. Your selection
+becomes the default model for Hermes, using Devin as the provider.
+
+If the picker does not open, run `hermes devin use` to choose your model.
+
+Check that sign-in and API access are working:
+
+```bash
+hermes devin status
+```
+
+If the browser does not open, follow the
+[manual sign-in steps](#the-browser-does-not-open-or-hermes-runs-on-another-machine).
+
+### 3. Start using Hermes
+
+Start a session with your selected default model:
+
+```bash
+hermes
+```
+
+Or give Hermes a task directly:
+
+```bash
+hermes -z "fix the tests"
+```
+
+Inside an existing Hermes session, use `/model devin` to select a Devin model.
+
+## Everyday commands
+
+Run these in your terminal:
+
+| Command | What it does |
+| --- | --- |
+| `hermes devin login` | Sign in through your browser and choose a default model. |
+| `hermes devin use` | Choose a different default model from the available list. |
+| `hermes devin models` | List available model IDs. |
+| `hermes devin status` | Check sign-in, session expiry, and API access. |
+| `hermes devin status --no-check` | Check sign-in and session expiry without contacting the API. |
+| `hermes devin logout` | Remove the saved browser sign-in credentials. |
+
+Inside a Hermes session, use `/devin` to check sign-in status or `/model devin`
+to switch models.
+
+## Sign out or change accounts
+
+To remove your saved browser sign-in:
+
+```bash
+hermes devin logout
+```
+
+To use another account, sign out, then run `hermes devin login` and sign in
+with that account in your browser.
+
+If you previously set `DEVIN_API_KEY`, it takes priority over your saved
+browser sign-in. Logout does not remove that environment variable or
+credentials added with `hermes auth add devin`; manage those separately if
+you use them.
+
+## Alternative installation: pinned pack
+
+If `hermes plugins pack --help` is available, you can install both plugins
+with one command at the exact versions recorded in the pack:
 
 ```bash
 hermes plugins pack install https://raw.githubusercontent.com/zensi-dev/hermes-devin-auth/main/hermes-pack.yaml
 ```
 
-Then sign in and use it:
+Run this in an interactive terminal and confirm the pack review and any
+per-plugin prompts. Successful entries are enabled. Check that both plugins
+installed successfully, then continue with
+[sign-in and model selection](#2-sign-in-and-choose-a-model).
+
+If `pack` is unrecognized, use the [two installation commands](#1-install-both-plugins)
+above. The pack's recorded versions may differ from the latest repository
+version.
+
+## Troubleshooting
+
+### Installation fails with a repository or Git error
+
+Use the full slash-separated paths in the installation commands and check
+that `git --version` works.
+
+### A plugin already exists
+
+Check what is installed:
 
 ```bash
-hermes devin login                              # browser OAuth → model picker
-hermes -z "fix the tests" -m swe-1-6
-# or inside a session: /model devin
+hermes plugins list
 ```
 
-`hermes devin login` signs in and then offers the live model picker — the
-chosen model is saved as your default with `provider: devin`. To switch later:
-`hermes devin use`.
-
-### Alternative: install each plugin separately
+If both `devin-provider` and `devin` are present, enable them:
 
 ```bash
-hermes plugins install zensi-dev/hermes-devin-auth#plugins/model-providers/devin
-hermes plugins install zensi-dev/hermes-devin-auth#plugins/devin
+hermes plugins enable devin-provider
 hermes plugins enable devin
 ```
 
-Each half installs flat into `~/.hermes/plugins/`; the provider's
-`kind: model-provider` manifest routes it to provider discovery automatically.
+To replace an existing plugin, back up any edits you made inside its plugin
+directory, then repeat its installation command with `--force`. Plugin
+directories are normally under `~/.hermes/plugins/`.
 
-### Requirements
+### `hermes devin` is missing or reports a missing provider
 
-- Hermes Agent with plugin support
-- `httpx` (`pip install httpx` — Hermes prints this hint at install; it never
-  auto-installs plugin dependencies)
-- A Devin account
+Check that both `devin` and `devin-provider` are installed and enabled in your
+active Hermes profile. If only one installed successfully, fix the failed
+installation before signing in. Restart existing Hermes sessions afterward.
 
-## Layout
+### Installation reports a missing Python dependency
 
-```
-hermes-pack.yaml               # one-command install manifest (pack install)
-plugins/
-├── model-providers/devin/     # provider plugin (auto-loaded, no enable needed)
-│   ├── plugin.yaml
-│   ├── __init__.py            # ProviderProfile + register_provider()
-│   ├── client.py              # Connect/protobuf client (chat.completions.create)
-│   ├── oauth.py               # PKCE login + credential-pool persistence
-│   └── proto_wire.py          # minimal protobuf codec (no protobuf dep)
-└── devin/                     # CLI/slash-command plugin (needs plugins.enabled)
-    ├── plugin.yaml
-    └── __init__.py            # hermes devin <cmd> + /devin
-```
+The provider requires `httpx>=0.24,<1`. Recent Hermes versions manage this
+dependency during installation. If your version only prints a dependency
+hint, update Hermes or install the dependency into **Hermes' own Python
+environment**, not an unrelated system Python.
 
-Two plugins because Hermes loads them differently: model-provider plugins are
-imported for their `register_provider()` side effect (no `ctx`), while CLI
-commands need `register(ctx)`. The CLI plugin loads the provider package by
-path so both share one implementation. The provider manifest is named
-`devin-provider` so the two halves don't collide when installed flat into
-`~/.hermes/plugins/`; the registered provider name stays `devin`.
+### The browser does not open or Hermes runs on another machine
 
-## Auth notes
+Run `hermes devin login` in a terminal. Open the sign-in URL printed there in
+your browser and complete sign-in. Copy the full callback URL you are
+redirected to and paste it into the waiting terminal.
 
-- `DEVIN_API_KEY` env var overrides the stored credential (standard api_key
-  precedence).
-- `hermes auth add devin` also works for a manually-pasted token.
-- `hermes devin logout` removes the OAuth credential from the pool.
+### Your session has expired or API access fails
 
-## Wire notes
+Run `hermes devin status` to see the error. If the session has expired, run
+`hermes devin login` again. If you have set `DEVIN_API_KEY`, check it too:
+it overrides the saved browser sign-in.
 
-- Session token is prefixed `devin-session-token$` before use.
-- `GetUserJwt` returns a short-lived user JWT + optional custom API server URL;
-  cached until the JWT's own expiry, refreshed on 401.
-- `GetChatMessage` request: `metadata` (windsurf IDE identity), `prompt`
-  (system), `chat_message_prompts` (user/system/tool), `chat_model_uid`,
-  `request_type=CASCADE`, `CompletionConfiguration` (max_tokens, temperature,
-  top_p, stop patterns), `tools`, `tool_choice{auto}`, `cascade_id` (threaded
-  per Hermes session via `extra_body.devin_cascade_id`).
-- Response stream: Connect frames (flag + 4-byte length + gzip payload);
-  `delta_text`/`delta_thinking`/`delta_tool_calls`/`stop_reason`/`usage` map to
-  OpenAI `ChatCompletionChunk` deltas. Cumulative `arguments_json` snapshots are
-  diffed to deltas.
-- `stop_reason` → `finish_reason`: `FUNCTION_CALL`/any tool call → `tool_calls`,
-  `MAX_TOKENS` → `length`, else `stop`.
+### A pack-installed plugin will not update
+
+Pack-installed plugins are pinned; ordinary `hermes plugins update` does not
+move their pins. To reinstall both at the pack's recorded versions, back up
+any edits inside their plugin directories and repeat the pack installation
+command with `--force`. This uses the versions recorded in the pack, which
+may differ from the latest repository version.
+
+### Still stuck?
+
+When reporting a problem, include the command you ran, the error message,
+and the output of `hermes --version`. Remove any tokens or sign-in callback
+URLs before sharing.
